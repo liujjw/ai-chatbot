@@ -6,16 +6,16 @@ import { IconArrowRight } from '@/components/ui/icons'
 
 const exampleMessages = [
   {
-    heading: 'Is Jackie the right fit for [xyz job posting]?',
-    message: `What is a "serverless function"? [function call, langchain, s3, lambda]`
+    heading: 'Tell me about Jackie.',
+    message: 'Summarize the resume. \n'
   },
   {
-    heading: 'What\'s he working the most on now?',
-    message: 'Summarize the following article for a 2nd grader: \n'
+    heading: 'Is Jackie a good fit for the job at [https://job-description.xyz] ?', 
+    message: `Identify some matching keywords from the job description at [INSERT LINK HERE]`
   },
   {
-    heading: 'Explain his rust-os project to me. (docsearch blog posts, readmes, and pdfs)', 
-    message: `Draft an email to my boss about the following: \n`
+    heading: 'What does Jackie value in a workplace?',
+    message: `Tell me about things that are important to Jackie in the workplace. \n`
   }
 ]
 
