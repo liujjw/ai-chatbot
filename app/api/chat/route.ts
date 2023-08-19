@@ -39,7 +39,7 @@ export async function POST(req: Request) {
       throw new UserError('Missing request data')
     }
 
-    const { messages: content } = requestData
+    const { messages: [ { content } ] } = requestData
     const query = content
     console.log(requestData)
     if (!query) {
