@@ -4,7 +4,7 @@ NextJS chatbot for information about me. Forked from the starter `NextJS chatbot
 ## Implmenentation
 There are two steps, build time and runtime. Build time uses [nextjs-openai-doc-search](https://github.com/liujjw/nextjs-openai-doc-search) and runtime uses [API endpoint](https://github.com/liujjw/ai-chatbot/blob/my-ai/app/api/chat/route.ts).
 #### Build time (generate DB embeddings)
-This is mostly automated, just modify Notion documents, and then rebuild the embeddings database by running [nextjs-openai-doc-search](https://github.com/liujjw/nextjs-openai-doc-search). This assumes the tables and functions in Supabase have already been created, which is most likely true.
+This is mostly automated, just modify Notion documents, and then rebuild the embeddings database by running [nextjs-openai-doc-search](https://github.com/liujjw/nextjs-openai-doc-search). This assumes the tables and functions in Supabase have already been created, which is most likely true (`pnpm run notion-pages && pnpm run embeddings`).
 1. Use Notion for its readability and ability to be edited easily. Convert everything into Notion for simplicity, see Recruiting folder in Notion. Use `Notion integrations` (add a connection for every page) and `notion-to-md` to generate automatically Markdown into a directory.
 2. Use [nextjs-openai-doc-search](https://github.com/liujjw/nextjs-openai-doc-search) `generate-embeddings.ts` script to look at `.mdx` and `md` files and build the embeddings into [Supabase](https://github.com/liujjw/nextjs-openai-doc-search/blob/main/supabase/migrations/20230406025118_init.sql) Cloud. See Supabase Cloud project.
 

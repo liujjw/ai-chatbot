@@ -1,70 +1,182 @@
-import { kv } from '@vercel/kv'
 import { OpenAIStream, StreamingTextResponse } from 'ai'
-import { Configuration, OpenAIApi } from 'openai-edge'
-
-import { auth } from '@/auth'
-import { nanoid } from '@/lib/utils'
+import { createClient } from '@supabase/supabase-js'
+import { codeBlock, oneLine } from 'common-tags'
+import GPT3Tokenizer from 'gpt3-tokenizer'
+import {
+  Configuration,
+  OpenAIApi,
+  CreateModerationResponse,
+  CreateEmbeddingResponse,
+  ChatCompletionRequestMessage,
+} from 'openai-edge'
+import { ApplicationError, UserError } from '@/lib/errors'
 
 export const runtime = 'edge'
+
+const openAiKey = process.env.OPENAI_API_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
 const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY
 })
-
 const openai = new OpenAIApi(configuration)
 
 export async function POST(req: Request) {
-  const json = await req.json()
-  const { messages, previewToken } = json
-  const session = await auth()
-
-  if (process.env.VERCEL_ENV === 'preview') {
-    if (session == null) {
-      return new Response('Unauthorized', { status: 401 })
+  try {
+    if (!openAiKey) {
+      throw new ApplicationError('Missing environment variable OPENAI_KEY')
+    }    
+    if (!supabaseUrl) {
+      throw new ApplicationError('Missing environment variable SUPABASE_URL')
     }
-  }
+    if (!supabaseServiceKey) {
+      throw new ApplicationError('Missing environment variable SUPABASE_SERVICE_ROLE_KEY')
+    }
 
-  if (previewToken) {
-    configuration.apiKey = previewToken
-  }
+    const requestData = await req.json()
+    if (!requestData) {
+      throw new UserError('Missing request data')
+    }
 
-  const res = await openai.createChatCompletion({
-    model: 'gpt-3.5-turbo',
-    messages,
-    temperature: 0.7,
-    stream: true
-  })
+    const { messages: content } = requestData
+    const query = content
+    console.log(requestData)
+    if (!query) {
+      throw new UserError('Missing query in request data')
+    }
 
-  const stream = OpenAIStream(res, {
-    async onCompletion(completion) {
-      const title = json.messages[0].content.substring(0, 100)
-      const userId = session?.user?.id
-      if (userId) {
-        const id = json.id ?? nanoid()
-        const createdAt = Date.now()
-        const path = `/chat/${id}`
-        const payload = {
-          id,
-          title,
-          userId,
-          createdAt,
-          path,
-          messages: [
-            ...messages,
-            {
-              content: completion,
-              role: 'assistant'
-            }
-          ]
-        }
-        await kv.hmset(`chat:${id}`, payload)
-        await kv.zadd(`user:chat:${userId}`, {
-          score: createdAt,
-          member: `chat:${id}`
-        })
+    const supabaseClient = createClient(supabaseUrl, supabaseServiceKey)
+
+    const sanitizedQuery = query.trim()
+    const moderationResponse: CreateModerationResponse = await openai
+      .createModeration({ input: sanitizedQuery })
+      .then((res) => res.json())
+    const [results] = moderationResponse.results
+    if (results.flagged) {
+      throw new UserError('Flagged content', {
+        flagged: true,
+        categories: results.categories,
+      })
+    }
+
+    const embeddingResponse = await openai.createEmbedding({
+      model: 'text-embedding-ada-002',
+      input: sanitizedQuery.replaceAll('\n', ' '),
+    })
+
+    if (embeddingResponse.status !== 200) {
+      throw new ApplicationError('Failed to create embedding for question', embeddingResponse)
+    }
+
+    const {
+      data: [{ embedding }],
+    }: CreateEmbeddingResponse = await embeddingResponse.json()
+
+    const { error: matchError, data: pageSections } = await supabaseClient.rpc(
+      'match_page_sections',
+      {
+        embedding,
+        match_threshold: 0.78,
+        match_count: 10,
+        min_content_length: 50,
       }
-    }
-  })
+    )
 
-  return new StreamingTextResponse(stream)
+    if (matchError) {
+      throw new ApplicationError('Failed to match page sections', matchError)
+    }
+
+    const tokenizer = new GPT3Tokenizer({ type: 'gpt3' })
+    let tokenCount = 0
+    let contextText = ''
+
+    for (let i = 0; i < pageSections.length; i++) {
+      const pageSection = pageSections[i]
+      const content = pageSection.content
+      const encoded = tokenizer.encode(content)
+      tokenCount += encoded.text.length
+
+      if (tokenCount >= 1500) {
+        break
+      }
+
+      contextText += `${content.trim()}\n---\n`
+    }
+
+    const prompt = codeBlock`
+      ${oneLine`
+        You are a very enthusiastic representative for Jackie Liu speaking to a 
+        potential recruiter for a software engineering role. Given the following 
+        sections from Jackie's written notes, documents, and his resume, answer 
+        the question using only that information, outputted in markdown format. 
+        If you are unsure and the answer is not explicitly written down, say
+        "Sorry, I don't know how to help with that."
+      `}
+
+      Context sections:
+      ${contextText}
+
+      Question: """
+      ${sanitizedQuery}
+      """
+
+      Answer as markdown (including related code snippets if available):
+    `
+
+    const chatMessage: ChatCompletionRequestMessage = {
+      role: 'user',
+      content: prompt,
+    }
+
+    const response = await openai.createChatCompletion({
+      model: 'gpt-3.5-turbo',
+      messages: [chatMessage],
+      max_tokens: 512,
+      temperature: 0,
+      stream: true,
+    })
+
+    if (!response.ok) {
+      const error = await response.json()
+      throw new ApplicationError('Failed to generate completion', error)
+    }
+
+    // Transform the response into a readable stream
+    const stream = OpenAIStream(response) 
+
+    // Return a StreamingTextResponse, which can be consumed by the client
+    return new StreamingTextResponse(stream)
+  } catch (err: unknown) {
+    if (err instanceof UserError) {
+      return new Response(
+        JSON.stringify({
+          error: err.message,
+          data: err.data,
+        }),
+        {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
+    } else if (err instanceof ApplicationError) {
+      // Print out application errors with their additional data
+      console.error(`${err.message}: ${JSON.stringify(err.data)}`)
+    } else {
+      // Print out unexpected errors as is to help with debugging
+      console.error(err)
+    }
+
+    // TODO: include more response info in debug environments
+    return new Response(
+      JSON.stringify({
+        error: 'There was an error processing your request',
+      }),
+      {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
+    )
+  }
+
 }
