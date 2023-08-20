@@ -7,15 +7,23 @@ import { IconArrowRight } from '@/components/ui/icons'
 const exampleMessages = [
   {
     heading: 'Tell me about Jackie.',
-    message: 'Summarize Jackie\'s resume.'
+    message: 'Tell me about Jackie.'
   },
   {
-    heading: 'Is Jackie a good fit for the job at [https://job-description.xyz] ?', 
-    message: `Identify some matching keywords from the job description at [INSERT LINK HERE]`
+    heading: 'How can I contact Jackie?',
+    message: 'How can I contact Jackie?'
   },
   {
-    heading: 'What does Jackie value in a workplace?',
+    heading: 'Is Jackie a good fit for the job at [INSERT LINK HERE]?', 
+    message: `Is Jackie a good fit for the job at [https://job-description.xyz]`
+  },
+  {
+    heading: 'Tell me about things that are important to Jackie in the workplace.',
     message: `Tell me about things that are important to Jackie in the workplace.`
+  },
+  {
+    heading: 'Highlight Jackie\'s experience with common software development tools?',
+    message: 'Highlight Jackie\'s experience with common software development tools?'
   }
 ]
 

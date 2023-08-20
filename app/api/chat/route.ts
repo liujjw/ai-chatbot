@@ -10,6 +10,8 @@ import {
   ChatCompletionRequestMessage,
 } from 'openai-edge'
 import { ApplicationError, UserError } from '@/lib/errors'
+import HTMLParser from 'node-html-parser';
+import fetch from 'node-fetch';
 
 export const runtime = 'edge'
 
@@ -22,6 +24,11 @@ const configuration = new Configuration({
 })
 const openai = new OpenAIApi(configuration)
 
+/**
+ * Take `req` matched with an embedding, optionally including past messages, to pre-prompt a Chat Completion request to GPT-3.
+ * @param req Everytime enter is pressed, a POST request is sent to the server with the current messages in the chat. This includes all messages, including past messages in the current session.
+ * @returns GPT-3 response
+ */
 export async function POST(req: Request) {
   try {
     if (!openAiKey) {
@@ -35,13 +42,50 @@ export async function POST(req: Request) {
     }
 
     const requestData = await req.json()
+    console.debug(requestData, '\n\n\n\n\n\n\n')
     if (!requestData) {
       throw new UserError('Missing request data')
     }
 
-    const { messages: [ { content } ] } = requestData
+    let contextText = ''
+
+    const { messages } = requestData
+
+    // incoroporate assistant messages into context text    
+    // incorporate web scraping into context
+    for (const message of messages) {
+      const { role, content } = message
+      if (role === 'assistant') {
+        contextText += `${content.trim()}\n---\n`
+      } else if (role === 'user') {
+        // match out urls
+        const urlRegex = /^(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^/#?]+)*\/?(?:#[\w.-]*)?(?:\?(?:\w+=[^&]*&?)*)?$/g
+        const matches = []
+        let match
+        while ((match = urlRegex.exec(content)) !== null) {
+          matches.push(match[0]);
+        }
+        // scrape urls
+        for (const match of matches) {
+          const response = await fetch(match)
+          const root = HTMLParser.parse(await response.text())
+          const allText: string[] = [];
+          const textNodes = root.querySelectorAll('*:not(script):not(style)')
+          textNodes.forEach((node) => {
+            const text = node.innerText.trim();
+            if (text.length > 0 && !text.match(/[\n\r]/)) {
+              allText.push(text);
+            }
+          });
+          contextText += `${allText.join('\n')}\n---\n`
+        }
+      }
+    }
+
+    
+    const latestMessage = messages[messages.length - 1]
+    const { content } = latestMessage
     const query = content
-    console.log(requestData)
     if (!query) {
       throw new UserError('Missing query in request data')
     }
@@ -89,7 +133,6 @@ export async function POST(req: Request) {
 
     const tokenizer = new GPT3Tokenizer({ type: 'gpt3' })
     let tokenCount = 0
-    let contextText = ''
 
     for (let i = 0; i < pageSections.length; i++) {
       const pageSection = pageSections[i]
@@ -104,14 +147,13 @@ export async function POST(req: Request) {
       contextText += `${content.trim()}\n---\n`
     }
 
+    // this is the prompt for every message, including continuing off of previous messages
+    // context may include past messages and webscraped results, but always the most similar decoded embedding vector from the database, or none if no match
     const prompt = codeBlock`
       ${oneLine`
         You are a very enthusiastic representative for Jackie Liu speaking to a 
         potential recruiter for a software engineering role. Given the following 
-        sections from Jackie's written notes, documents, and his resume, answer 
-        the question using only that information, outputted in markdown format. 
-        If you are unsure and the answer is not explicitly written down, say
-        "Sorry, I don't know how to help with that."
+        context about Jackie, try to answer the question using that information, and summarize concisely if its too long. If you are unsure and the answer is not explicitly written down, make your best guess.
       `}
 
       Context sections:
@@ -120,10 +162,7 @@ export async function POST(req: Request) {
       Question: """
       ${sanitizedQuery}
       """
-
-      Answer as markdown (including related code snippets if available):
     `
-
     const chatMessage: ChatCompletionRequestMessage = {
       role: 'user',
       content: prompt,
