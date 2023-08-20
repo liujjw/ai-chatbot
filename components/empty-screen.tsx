@@ -22,8 +22,12 @@ const exampleMessages = [
     message: `Tell me about things that are important to Jackie in the workplace.`
   },
   {
-    heading: 'Highlight Jackie\'s experience with common software development tools?',
-    message: 'Highlight Jackie\'s experience with common software development tools?'
+    heading: 'Describe Jackie\'s experience with the software development lifecycle',
+    message: 'Describe Jackie\'s experience with the software development lifecycle'
+  },
+  {
+    heading: 'Tell me about Jackie\'s research project, Rust OS that he describes more in one of his posts',
+    message: 'Tell me about Jackie\'s research project, Rust OS that he describes more in one of his posts'
   }
 ]
 
@@ -35,12 +39,11 @@ export function EmptyScreen({ setInput }: Pick<UseChatHelpers, 'setInput'>) {
           Who is, Jackie?
         </h1>
         <p className="mb-2 leading-normal text-muted-foreground">
-          Pre-prompted LLM chatbot about{' '}
-          <ExternalLink href="https://liujjw.xyz">liujjw.xyz</ExternalLink>
-          .
+          Pre-prompted LLM chatbot about the info on {' '}
+          <ExternalLink href="https://liujjw.xyz">liujjw.xyz</ExternalLink> and yours truly.
         </p>
         <p className="leading-normal text-muted-foreground">
-          Try the following examples:
+          Try the following examples, try some follow-up questions, and try similar questions:
         </p>
         <div className="mt-4 flex flex-col items-start space-y-2">
           {exampleMessages.map((message, index) => (
