@@ -11,7 +11,6 @@ import {
 } from 'openai-edge'
 import { ApplicationError, UserError } from '@/lib/errors'
 import HTMLParser from 'node-html-parser';
-import fetch from 'node-fetch';
 
 export const runtime = 'edge'
 
@@ -23,6 +22,30 @@ const configuration = new Configuration({
   apiKey: process.env.OPENAI_API_KEY
 })
 const openai = new OpenAIApi(configuration)
+
+async function webScrapeIntoContext(content: string, context: string) {
+  const urlRegex = /https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*)/g;
+  const matches = content.match(urlRegex)
+  if (!matches) return context
+  // scrape urls
+  for (const match of matches) {
+    const response = await fetch(match)
+    const root = HTMLParser.parse(await response.text())
+    const allText: string[] = [];
+    const textNodes = root.querySelectorAll('*:not(script):not(style)')
+    textNodes.forEach((node) => {
+      const text = node.innerText.trim();
+      if (text.length > 0 && 
+        !text.match(/[\n\r]/) &&
+        text !== allText[allText.length - 1]) {
+        allText.push(text);
+      }
+    });
+    context += `${allText.join('\n')}\n---\n`
+    console.log(context)
+    return context
+  }
+}
 
 /**
  * Take `req` matched with an embedding, optionally including past messages, to pre-prompt a Chat Completion request to GPT-3.
@@ -42,7 +65,6 @@ export async function POST(req: Request) {
     }
 
     const requestData = await req.json()
-    console.debug(requestData, '\n\n\n\n\n\n\n')
     if (!requestData) {
       throw new UserError('Missing request data')
     }
@@ -58,27 +80,7 @@ export async function POST(req: Request) {
       if (role === 'assistant') {
         contextText += `${content.trim()}\n---\n`
       } else if (role === 'user') {
-        // match out urls
-        const urlRegex = /^(?:https?:\/\/)?(?:www\.)?[\w.-]+\.[a-z]{2,}(?:\/[^/#?]+)*\/?(?:#[\w.-]*)?(?:\?(?:\w+=[^&]*&?)*)?$/g
-        const matches = []
-        let match
-        while ((match = urlRegex.exec(content)) !== null) {
-          matches.push(match[0]);
-        }
-        // scrape urls
-        for (const match of matches) {
-          const response = await fetch(match)
-          const root = HTMLParser.parse(await response.text())
-          const allText: string[] = [];
-          const textNodes = root.querySelectorAll('*:not(script):not(style)')
-          textNodes.forEach((node) => {
-            const text = node.innerText.trim();
-            if (text.length > 0 && !text.match(/[\n\r]/)) {
-              allText.push(text);
-            }
-          });
-          contextText += `${allText.join('\n')}\n---\n`
-        }
+        contextText = (await webScrapeIntoContext(content, contextText))!
       }
     }
 
