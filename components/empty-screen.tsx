@@ -14,8 +14,8 @@ const exampleMessages = [
     message: 'How can I contact Jackie?'
   },
   {
-    heading: 'Is Jackie a good fit for the job described by [DESCRIPTION]?', 
-    message: `Is Jackie a good fit for the job described by [DESCRIPTION]`
+    heading: 'Is Jackie a good fit for the job described by [DESCRIPTION or LINK]?', 
+    message: `Is Jackie a good fit for the job described by [DESCRIPTION or LINK]`
   },
   {
     heading: 'Tell me about things that are important to Jackie in the workplace.',

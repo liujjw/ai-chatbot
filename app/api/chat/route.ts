@@ -32,7 +32,13 @@ async function webScrapeIntoContext(content: string, context: string) {
     const response = await fetch(match)
     const root = HTMLParser.parse(await response.text())
     const allText: string[] = [];
-    const textNodes = root.querySelectorAll('*:not(script):not(style):not(nav div)')
+    // div[class^="content"], div[id^="content"],get p, string inside string
+    let textNodes;
+    if (root.querySelector('div[class^="content"]')) {
+      textNodes = root.querySelectorAll('div[class^="content"]')
+    } else {
+      textNodes = root.querySelectorAll('*:not(script):not(style):not(nav div)')
+    }
     textNodes.forEach((node) => {
       const text = node.innerText.trim();
       if (text.length > 0 && 
