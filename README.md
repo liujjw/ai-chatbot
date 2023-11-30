@@ -1,3 +1,5 @@
+[![Netlify Status](https://api.netlify.com/api/v1/badges/e990dcda-6167-4a89-a236-312b3c7fe9e7/deploy-status)](https://app.netlify.com/sites/nimble-eclair-c728c4/deploys)
+
 # About
 NextJS chatbot for information about me. Forked from the starter `NextJS chatbot` template. Some components removed. See project description in main branch README. Lots of unused code, for example for Vercel KV. We use the OpenAI Embeddings API, inspired from `nextjs-doc-search` project, implemented through the generate embeddings command. Use `Supabase` Cloud for the backend.
 
