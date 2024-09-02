@@ -33,6 +33,8 @@ async function webScrapeIntoContext(content: string, context: string) {
     const root = HTMLParser.parse(await response.text())
     const allText: string[] = [];
     // div[class^="content"], div[id^="content"],get p, string inside string
+    // could also try to get jsdom to work with readability
+    // web scraping is hard, best to hard code sites on a case by case basis
     let textNodes;
     if (root.querySelector('div[class^="content"]')) {
       textNodes = root.querySelectorAll('div[class^="content"]')
